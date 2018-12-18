@@ -1,13 +1,15 @@
+const Middleware = require('./middleware')
+
 class Ginger {
   constructor() {
     this.server = require('http').createServer()
-    this.middlewares = []
+    this.middleware = new Middleware()
 
     this.init()
   }
 
   use(fn) {
-    this.middlewares.push(fn)
+    this.middleware.add(fn)
     return this
   }
 
@@ -47,13 +49,8 @@ class Ginger {
           res.end(data)
         }
 
-        // run the middlewares
-        const runMiddlewares = index => {
-          const count = this.middlewares.length
-          if(index < count) return this.middlewares[index].call(null, req, res, () => runMiddlewares(index+1))
-        }
-
-        runMiddlewares(0)
+        // run the middleware
+        this.middleware.run(req, res)
 
         return res.status(500).end(`Cannot ${req.method} ${req.url}`)
       })
