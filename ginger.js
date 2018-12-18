@@ -17,12 +17,17 @@ class Ginger {
     this.server.listen(port, callback)
   }
 
+  qs(query) {
+    return [...new URLSearchParams(query).entries()]
+      .reduce((sum, [key,val]) => Object.assign({[key]:val}, sum), {})
+  }
+
   init() {
 
     ['get', 'post', 'put', 'patch', 'delete'].forEach(verb => {
-      this[verb] = function(url, callback) {
+      this[verb] = function(path, callback) {
         this.use((req, res, next) => {
-          if(req.url === url && req.method === verb.toUpperCase()) callback(req, res, next)
+          if(req.path === path && req.method === verb.toUpperCase()) callback(req, res, next)
           else next()
         })
       }
@@ -30,29 +35,41 @@ class Ginger {
 
     this.server
       .on('request', (req, res) => {
+        const [path, query] = req.url.split('?')
+        req.query = this.qs(query)
+        req.path = path
 
-        res.setHeader('X-Powered-By', 'Ginger')
+        req.body = []
 
-        res.status = function(status) {
-          res.statusCode = status
-          return res
-        }
+        req.on('data', chunk => {
+          req.body.push(chunk)
+        })
+          .on('end', () => {
 
-        res.json = function(data) {
-          const json = JSON.stringify(data)
-          res.setHeader('Content-type', 'application/json')
-          res.end(json)
-        }
+            req.body = JSON.parse(Buffer.concat(req.body).toString())
 
-        res.send = function(data) {
-          res.setHeader('Content-type', 'text/html')
-          res.end(data)
-        }
+            res.setHeader('X-Powered-By', 'Ginger')
 
-        // run the middleware
-        this.middleware.run(req, res)
+            res.status = function(status) {
+              res.statusCode = status
+              return res
+            }
 
-        return res.status(500).end(`Cannot ${req.method} ${req.url}`)
+            res.json = function(data) {
+              const json = JSON.stringify(data)
+              res.setHeader('Content-type', 'application/json')
+              res.end(json)
+            }
+
+            res.send = function(data) {
+              res.setHeader('Content-type', 'text/html')
+              res.end(data)
+            }
+
+            this.middleware.run(req, res)
+
+            return res.status(500).end(`Cannot ${req.method} ${req.url}`)
+          })
       })
   }
 }
